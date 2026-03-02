@@ -1,19 +1,21 @@
 # Smart 404 Redirect
 
-A lightweight WordPress plugin that intelligently handles 404 errors by redirecting visitors to relevant pages — with support for wildcard URL pattern matching, per-rule redirect types, drag-and-drop rule ordering, and an optional activity log.
+A lightweight WordPress plugin for intelligently managing redirects across your site. Handles 404 errors with wildcard pattern rules, manages permanent or temporary page-to-page redirects, supports bulk CSV import and export, and keeps an optional activity log of every redirect fired.
 
 ---
 
 ## Features
 
-- **Default fallback redirect** — send all unmatched 404s to any page or URL
-- **Pattern-based rules** — match URL segments using `*` wildcards and redirect to different destinations per pattern
-- **Per-rule redirect type** — choose 301 (permanent) or 302 (temporary) independently for each rule and for the global default
-- **Inline rule editing** — edit any saved rule directly in the admin UI without leaving the page
-- **Drag-and-drop ordering** — rules are evaluated top-to-bottom; reorder them by dragging
-- **Quick Page Picker** — click any published WordPress page to instantly set it as the default redirect target
-- **Activity log** — optionally log every redirect with timestamp, source URL, destination, and the rule that matched (stores the last 100 entries)
-- **No external dependencies** — single PHP file plus two asset files, no composer, no npm
+- **Page Redirects** — redirect any URL to any destination on every request, whether the page exists or not. Exact path matching, case-insensitive. Each redirect has its own 301 or 302 type.
+- **404 Pattern Rules** — wildcard rules that only fire when WordPress returns a 404. Use `*` to match URL segments. Rules evaluate top-to-bottom; first match wins.
+- **Default 404 Fallback** — a catch-all redirect for any 404 that matches no pattern rule.
+- **CSV Import** — bulk-import page redirects from a `.csv` file. Drag and drop or browse to upload. Live preview with row-level validation before committing. Choose to merge with existing redirects or replace them entirely.
+- **CSV Export** — download your current page redirects as a ready-to-reimport `.csv` file.
+- **Inline Editing** — edit any saved rule or redirect in place without leaving the page.
+- **Drag-and-drop Ordering** — reorder 404 pattern rules by dragging. Priority runs top to bottom.
+- **Quick Page Picker** — click any published WordPress page to set it as the default 404 fallback.
+- **Activity Log** — optionally log every redirect with timestamp, source path, destination, and matched rule or redirect label. Capped at 100 entries.
+- **No external dependencies** — three files, no Composer, no npm, no external services.
 
 ---
 
@@ -23,97 +25,194 @@ A lightweight WordPress plugin that intelligently handles 404 errors by redirect
 
 1. Download `smart-404-redirect.zip`
 2. In your WordPress admin go to **Plugins → Add New → Upload Plugin**
-3. Choose the ZIP file and click **Install Now**
+3. Select the ZIP file and click **Install Now**
 4. Click **Activate Plugin**
 
 ### From source
 
-1. Copy the `smart-404-redirect/` folder into your site's `wp-content/plugins/` directory
+1. Copy the `smart-404-redirect/` folder into `wp-content/plugins/`
 2. Go to **Plugins** in your WordPress admin and activate **Smart 404 Redirect**
 
+After activation navigate to **Settings → Smart 404 Redirect**.
+
 ---
 
-## Getting Started
+## The Four Tabs
 
-After activation, navigate to **Settings → Smart 404 Redirect** in your WordPress admin. The settings page has three tabs.
+### General
 
-### General Tab
+Configure the site-wide 404 fallback and logging.
 
-| Setting                     | Description                                                                                                                                                                        |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Fallback Page**           | The URL to redirect all 404s that don't match any pattern rule. Accepts a relative path (e.g. `/not-found`) or a full URL. Leave empty to show the WordPress default 404 template. |
-| **Redirect Type**           | Whether the default fallback uses a `301` permanent or `302` temporary redirect.                                                                                                   |
-| **Enable Activity Logging** | When checked, every redirect is written to the Activity Log.                                                                                                                       |
+| Setting                     | Description                                                                                                                                                          |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fallback Page**           | Where to send 404 visitors that match no pattern rule. Accepts a relative path (`/not-found`) or a full URL. Leave empty to show the default WordPress 404 template. |
+| **Redirect Type**           | Whether the fallback uses `301` permanent or `302` temporary. Does not affect individual page redirects or pattern rules, which each have their own type.            |
+| **Enable Activity Logging** | When on, every fired redirect is written to the Activity Log tab.                                                                                                    |
 
-The **Quick Page Picker** panel on the same tab lists all published pages on your site. Click any page to populate the Fallback Page field with its path, then save.
+The **Quick Page Picker** panel lists all published pages. Click one to populate the Fallback Page field instantly, then save.
 
-### Pattern Rules Tab
+---
 
-Pattern rules let you redirect specific groups of 404 URLs to different destinations. For example, if your `/buy-currency/usd` page was deleted but `/buy-currency` still exists, you can redirect all `/buy-currency/*` 404s back to `/buy-currency` instead of your generic 404 page.
+### Page Redirects
 
-**Adding a rule**
+Redirects that fire on **every request**, whether or not the page exists in WordPress. Use this to move or rename pages, forward old URLs after a site migration, or set up any explicit URL mapping.
+
+Matching is exact and case-insensitive. No wildcards.
+
+#### Adding a redirect manually
+
+1. Click **+ Add Redirect**
+2. Fill in the fields:
+   - **Label** _(optional)_ — a human-readable name shown in the list and activity log
+   - **From** — the source path, e.g. `/old-about`
+   - **To** — the destination path or full URL, e.g. `/about-us` or `https://example.com`
+   - **Redirect Type** — `301` permanent or `302` temporary
+3. Click **Add Redirect** — appears in the list immediately
+4. Click **Save All Redirects** to write to the database
+
+#### Editing a redirect
+
+Click **Edit** on any row to expand it inline. Change any field, then click **Save Changes**. The list updates locally — click **Save All Redirects** to persist.
+
+#### Deleting a redirect
+
+Click **Delete** and confirm. Click **Save All Redirects** to persist.
+
+#### Importing from CSV
+
+Click **↑ Import CSV** to open the import panel.
+
+**Supported columns:**
+
+| Column  | Required | Description                                              |
+| ------- | -------- | -------------------------------------------------------- |
+| `from`  | Yes      | Source path to match, e.g. `/old-page`                   |
+| `to`    | Yes      | Destination path or full URL                             |
+| `type`  | No       | `301` or `302`. Defaults to `301` if omitted or invalid. |
+| `label` | No       | Human-readable name for this redirect                    |
+
+**Example CSV:**
+
+```csv
+from,to,type,label
+/old-about,/about-us,301,About Page Move
+/blog/2019/hello,/blog/hello,301,Old Post
+/temp-sale,/sale,302,Seasonal Promo
+```
+
+**Steps:**
+
+1. Click **↑ Import CSV** to open the panel
+2. Drag and drop a `.csv` file onto the drop zone, or click **Browse File**
+3. Review the preview table — each row shows a status:
+   - **✓ valid** — will be imported
+   - **⚠ warning** — duplicate `from` within the file, or invalid type (still imported with default 301)
+   - **✕ error** — missing `from` or `to` field (skipped)
+4. Choose your merge strategy:
+   - **Default (merge)** — imported rows are appended. Any `from` path that already exists in your current list is skipped.
+   - **Replace all existing redirects** — tick the checkbox to wipe the current list and replace it entirely with the imported rows.
+5. Click **Import N Redirects** to apply
+6. Click **Save All Redirects** to persist to the database
+
+#### Exporting to CSV
+
+Click **↓ Export CSV** to download all current page redirects as `redirects-export.csv`. The file uses the same four-column format and can be re-imported directly.
+
+---
+
+### 404 Rules
+
+Wildcard pattern rules that only fire when WordPress determines a request results in a 404 error. Use these to handle groups of deleted or moved URLs without listing every path individually.
+
+Rules run top-to-bottom. The first rule whose pattern matches the requested URL is used; no further rules are checked.
+
+#### Pattern syntax
+
+Use `*` as a wildcard matching any sequence of characters including slashes. Patterns are matched against the path portion of the URL, without a leading slash. Matching is case-insensitive.
+
+| Pattern           | Matches                                           | Does not match     |
+| ----------------- | ------------------------------------------------- | ------------------ |
+| `buy-currency/*`  | `/buy-currency/usd`, `/buy-currency/eur/detail`   | `/buy-currency`    |
+| `shop/products/*` | `/shop/products/shoes`, `/shop/products/hats/red` | `/shop/categories` |
+| `old-page`        | `/old-page` (exact)                               | `/old-page/sub`    |
+| `blog/*/archive`  | `/blog/2023/archive`, `/blog/news/archive`        | `/blog/news`       |
+
+#### Adding a rule
 
 1. Click **+ Add Rule**
-2. Fill in the four fields:
-   - **Rule Name** — a label for your own reference (e.g. `Currency Pages`)
-   - **URL Pattern** — the path to match, without a leading slash, using `*` as a wildcard (e.g. `buy-currency/*`)
-   - **Redirect To** — the destination path or full URL (e.g. `/buy-currency`)
-   - **Redirect Type** — `301` or `302` for this rule specifically
-3. Click **Add Rule** — the rule appears in the list
-4. Click **Save All Rules** to persist changes to the database
+2. Fill in the fields:
+   - **Rule Name** — a label for your reference, e.g. `Currency Pages`
+   - **URL Pattern** — no leading slash, use `*` as wildcard, e.g. `buy-currency/*`
+   - **Redirect To** — destination path or full URL
+   - **Redirect Type** — `301` or `302`
+3. Click **Add Rule**
+4. Click **Save All Rules** to persist
 
-**Editing a rule**
+#### Reordering rules
 
-Click the **Edit** button on any rule to expand it into an inline editable form. Make your changes, then click **Save Changes**. The rule updates in the local list — click **Save All Rules** to write to the database.
+Drag any rule by the `⠿` handle to change its position. Click **Save All Rules** after reordering.
 
-**Reordering rules**
+#### Editing and deleting
 
-Drag any rule by its handle (`⠿`) to change its position. Rules are evaluated strictly top-to-bottom and the first match wins. Click **Save All Rules** after reordering.
-
-**Deleting a rule**
-
-Click **Delete** on any rule and confirm the prompt. Click **Save All Rules** to persist the removal.
-
-### Activity Log Tab
-
-When logging is enabled, every redirect the plugin performs is recorded here. The log shows:
-
-- **Time** — when the redirect happened (site timezone)
-- **From** — the 404 URL that was requested
-- **To** — the URL the visitor was sent to
-- **Matched Rule** — the name of the pattern rule that triggered, or `Default` for the fallback
-
-The log retains the 100 most recent entries. Click **Clear Log** to wipe it.
+Same inline workflow as page redirects — click **Edit**, make changes, **Save Changes**, then **Save All Rules**.
 
 ---
 
-## How Pattern Matching Works
+### Activity Log
 
-The URL pattern is matched against the path portion of the requested URL (everything after the domain, before any query string). Matching is case-insensitive.
+When logging is enabled in the General tab, every redirect fired by the plugin is recorded here.
 
-The `*` wildcard matches any sequence of characters, including slashes.
+| Column          | Description                                                                            |
+| --------------- | -------------------------------------------------------------------------------------- |
+| Time            | When the redirect occurred (site timezone)                                             |
+| From            | The path that was requested                                                            |
+| To              | The URL the visitor was sent to                                                        |
+| Rule / Redirect | The label of the page redirect or 404 rule that matched, or `Default` for the fallback |
 
-| Pattern           | Matches                                         | Does not match    |
-| ----------------- | ----------------------------------------------- | ----------------- |
-| `buy-currency/*`  | `buy-currency/usd`, `buy-currency/eur/detail`   | `buy-currency`    |
-| `shop/products/*` | `shop/products/shoes`, `shop/products/hats/red` | `shop/categories` |
-| `old-page`        | `old-page` (exact)                              | `old-page/sub`    |
-| `blog/*/archive`  | `blog/2023/archive`, `blog/news/archive`        | `blog/news`       |
+The log retains the 100 most recent entries. Click **Clear Log** to wipe it. For high-traffic sites consider leaving logging disabled and using server-level access logs instead.
 
-Rules are tested in order. The first rule whose pattern matches the requested URL is used, and no further rules are checked.
+---
 
-If no rule matches, the plugin falls back to the **Fallback Page** setting. If that is also empty, WordPress renders its default 404 template.
+## How the Two Redirect Systems Interact
+
+Both systems hook into `template_redirect`. Page Redirects run first (priority 1), 404 Rules run second (priority 2).
+
+|             | Page Redirects                              | 404 Pattern Rules                    |
+| ----------- | ------------------------------------------- | ------------------------------------ |
+| Fires when  | Every request                               | Only when WordPress returns a 404    |
+| Matching    | Exact path, case-insensitive                | Wildcard patterns, case-insensitive  |
+| Ordered     | No (first match by list position)           | Yes, top-to-bottom, first match wins |
+| Bulk import | CSV import / export                         | Manual only                          |
+| Use for     | Moving pages, site migrations, URL renaming | Handling groups of deleted URLs      |
 
 ---
 
 ## Redirect Types
 
-| Code  | Name      | Use when                                                                                                                 |
-| ----- | --------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `301` | Permanent | The old URL is gone for good. Search engines will transfer ranking signals to the new URL and stop indexing the old one. |
-| `302` | Temporary | The redirect is provisional. Search engines keep the original URL indexed. Use during maintenance or A/B testing.        |
+| Code  | Name      | When to use                                                                                                                                                                |
+| ----- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `301` | Permanent | The old URL is gone for good. Search engines transfer ranking signals to the new URL and remove the old one from their index. Use for site migrations and permanent moves. |
+| `302` | Temporary | The redirect is provisional. Search engines keep the original URL indexed. Use during maintenance, A/B testing, or seasonal campaigns.                                     |
 
 When in doubt, use `301`.
+
+---
+
+## CSV Format Reference
+
+```csv
+from,to,type,label
+/old-page,/new-page,301,Moved Page
+/promo,https://example.com/promo,302,External Promo
+/legacy,,301,
+```
+
+- Column order does not matter as long as headers are present
+- `type` accepts `301` or `302`; any other value is treated as `301`
+- `label` is optional; leave the cell empty or omit the column entirely
+- Blank lines are ignored
+- Quoted fields are supported for values containing commas
+- The exported file from **↓ Export CSV** is always in this format and can be re-imported
 
 ---
 
@@ -121,47 +220,65 @@ When in doubt, use `301`.
 
 ```
 smart-404-redirect/
-├── smart-404-redirect.php   # Main plugin file — all PHP logic
+├── smart-404-redirect.php   # All PHP — hooks, AJAX handlers, redirect logic
 └── assets/
     ├── admin.css            # Admin UI styles
-    └── admin.js             # Admin UI — vanilla JS + jQuery AJAX
+    └── admin.js             # Admin UI — vanilla JS + jQuery AJAX, CSV parser
 ```
 
-All plugin settings are stored in a single WordPress option (`smart_404_redirect_settings`) as a serialised array. No custom database tables are created.
+All settings are stored in a single WordPress option (`smart_404_redirect_settings`). No custom database tables are created.
 
 ---
 
 ## Requirements
 
 - WordPress 5.0 or later
-- PHP 7.2 or later
+- PHP 7.4 or later
 - No additional plugins or libraries required
 
 ---
 
 ## Frequently Asked Questions
 
-**Will this affect my site's front end?**
-No. The plugin only adds a hook on `template_redirect` that fires when WordPress determines a request results in a 404. It has no effect on pages that load normally.
+**Will this slow down my site?**
+The plugin reads a single database option on every request to check for page redirects. If you have no page redirects configured, the check returns immediately with no further work. The impact is negligible.
 
 **Does it affect SEO?**
-Using 301 redirects for permanently removed pages is generally beneficial for SEO — it signals to search engines that content has moved and passes link equity to the destination. Avoid using 302 unless the redirect is genuinely temporary.
+Using 301 redirects for permanently moved pages is good SEO practice — it passes link equity and signals to search engines to update their index. Avoid 302 unless the redirect is genuinely temporary.
 
-**What happens if two rules match the same URL?**
-Only the first matching rule (top of the list) is used. Reorder your rules so more specific patterns appear above broader ones.
+**What if two page redirects have the same `from` URL?**
+The first one in the list is used. When importing via CSV, duplicate `from` values within the file are flagged as warnings and the second occurrence is skipped during a merge import.
 
 **Can I redirect to an external URL?**
-Yes. Enter a full URL (starting with `https://`) in either the Fallback Page field or the Redirect To field of any rule.
+Yes. Use a full URL starting with `https://` in any redirect or rule destination field.
 
-**Is the activity log stored in the database?**
-Yes, log entries are appended to the plugin's settings option. The log is capped at 100 entries to avoid unbounded growth. For high-traffic sites, consider leaving logging disabled and using server-level access logs instead.
+**Can I use wildcards in page redirects?**
+No. Page redirects use exact path matching only. For wildcard behaviour use 404 Pattern Rules.
 
-**Can I use this alongside other redirect plugins?**
-Generally yes, but be aware of priority conflicts. This plugin hooks into `template_redirect` at priority `1` (earlier than most plugins) so its redirects fire first.
+**What happens if a URL is in both page redirects and 404 rules?**
+Page Redirects fire first. If a page redirect matches the URL, the 404 rules are never reached.
+
+**Is there a limit on how many redirects I can add?**
+There is no hard limit. However, all redirects and rules are loaded into memory on every request. For very large lists (thousands of entries), consider whether server-level redirects in `.htaccess` or `nginx.conf` would be more performant.
+
+**The activity log is not recording redirects.**
+Make sure **Enable Activity Logging** is checked and saved in the General tab.
 
 ---
 
 ## Changelog
+
+### 1.4.0
+
+- Added: CSV import for page redirects — drag-and-drop or browse, live row-level preview, merge or replace mode
+- Added: CSV export — download current page redirects as a `.csv` file
+- Added: import summary showing valid, warning, and error row counts before confirming
+
+### 1.3.0
+
+- Added: Page Redirects tab — exact URL-to-URL redirects that fire on every request, independent of 404 status
+- Added: per-redirect 301/302 type selection
+- Added: activity log now records page redirects alongside 404 rule hits
 
 ### 1.2.0
 
