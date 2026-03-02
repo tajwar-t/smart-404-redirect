@@ -3,8 +3,8 @@
  * Plugin Name: Smart 404 Redirect
  * Plugin URI: https://example.com/smart-404-redirect
  * Description: Intelligently redirect 404 errors and specific pages with pattern matching and direct page redirects.
- * Version: 1.4.0
- * Author: Tajwar Tajim
+ * Version: 1.5.0
+ * Author: Smart Plugins
  * License: GPL v2 or later
  * Text Domain: smart-404-redirect
  */
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'S404R_VERSION', '1.4.0' );
+define( 'S404R_VERSION', '1.5.0' );
 define( 'S404R_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'S404R_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -21,6 +21,8 @@ class Smart404Redirect {
 
     private static $instance = null;
     private $option_name = 'smart_404_redirect_settings';
+    private $page_hook   = '';          // Stores the hook suffix returned by add_menu_page()
+    private $menu_slug   = 'smart-404-redirect';
 
     public static function get_instance() {
         if ( null === self::$instance ) {
@@ -176,12 +178,14 @@ class Smart404Redirect {
     // ─── ADMIN ───────────────────────────────────────────────────────────────────
 
     public function add_admin_menu() {
-        add_options_page(
-            'Smart 404 Redirect',
-            'Smart 404 Redirect',
-            'manage_options',
-            'smart-404-redirect',
-            array( $this, 'render_settings_page' )
+        $this->page_hook = add_menu_page(
+            'Smart 404 Redirect',           // Page title
+            'URL Redirects',                 // Menu label
+            'manage_options',               // Capability
+            'smart-404-redirect',           // Menu slug
+            array( $this, 'render_settings_page' ),
+            'dashicons-randomize',          // Dashicon
+            80                              // Position (below Settings)
         );
     }
 
@@ -196,7 +200,8 @@ class Smart404Redirect {
     }
 
     public function enqueue_admin_scripts( $hook ) {
-        if ( 'settings_page_smart-404-redirect' !== $hook ) {
+        // Hook name for a top-level menu page is the value returned by add_menu_page()
+        if ( $hook !== $this->page_hook ) {
             return;
         }
         wp_enqueue_style(  's404r-admin', S404R_PLUGIN_URL . 'assets/admin.css', array(), S404R_VERSION );
@@ -208,6 +213,8 @@ class Smart404Redirect {
             'pages'    => $this->get_pages_list(),
         ) );
     }
+
+    public function get_pages_list_public() { return $this->get_pages_list(); }
 
     private function get_pages_list() {
         $pages  = get_pages( array( 'post_status' => 'publish' ) );
@@ -307,6 +314,94 @@ class Smart404Redirect {
         update_option( $this->option_name, $settings );
         wp_send_json_success();
     }
+
+    // ─── PUBLIC API ──────────────────────────────────────────────────────────────
+
+    /**
+     * Returns the admin URL for this plugin's settings page.
+     * Useful for Master_Plugin integrations or any external link.
+     *
+     * @return string
+     */
+    public function get_admin_url() {
+        return admin_url( 'admin.php?page=' . $this->menu_slug );
+    }
+
+    /**
+     * Renders the plugin settings page.
+     * Called directly by Master_Plugin::register_admin_page() when it needs
+     * to display this plugin's UI inside a master panel.
+     */
+    public function render_page() {
+        $this->render_settings_page();
+    }
 }
 
 Smart404Redirect::get_instance();
+
+// ─── PUBLIC HELPER FUNCTION ───────────────────────────────────────────────────
+
+/**
+ * Renders the Smart 404 Redirect admin page.
+ *
+ * Usage in a master plugin:
+ *
+ *   Master_Plugin::register_admin_page( 'custom-url-redirect-manager', function() {
+ *       curm_admin_page();
+ *   } );
+ *
+ * This function is intentionally kept outside the class so that Master_Plugin
+ * callbacks don't need to know about the singleton pattern.
+ */
+function curm_admin_page() {
+    $instance = Smart404Redirect::get_instance();
+
+    // Ensure scripts / styles are enqueued even when rendered inside a master panel.
+    // WordPress will deduplicate if they were already enqueued normally.
+    if ( ! wp_script_is( 's404r-admin', 'enqueued' ) ) {
+        wp_enqueue_style(
+            's404r-admin',
+            S404R_PLUGIN_URL . 'assets/admin.css',
+            array(),
+            S404R_VERSION
+        );
+        wp_enqueue_script(
+            's404r-admin',
+            S404R_PLUGIN_URL . 'assets/admin.js',
+            array( 'jquery' ),
+            S404R_VERSION,
+            true
+        );
+        wp_localize_script( 's404r-admin', 'S404R', array(
+            'nonce'    => wp_create_nonce( 's404r_nonce' ),
+            'ajax_url' => admin_url( 'admin-ajax.php' ),
+            'settings' => $instance->get_settings(),
+            'pages'    => $instance->get_pages_list_public(),
+        ) );
+    }
+
+    $instance->render_page();
+}
+
+// ─── MASTER PLUGIN INTEGRATION ────────────────────────────────────────────────
+
+/**
+ * Registers this plugin's settings page with a Master_Plugin if one is present.
+ *
+ * Master_Plugin::register_admin_page() is expected to accept:
+ *   - string   $slug     Unique identifier for the page within the master panel
+ *   - callable $callback A zero-argument callable that renders the page HTML
+ *
+ * The integration is wrapped in a check so the plugin remains fully functional
+ * even when Master_Plugin is not installed.
+ */
+add_action( 'plugins_loaded', function () {
+    if ( class_exists( 'Master_Plugin' ) && method_exists( 'Master_Plugin', 'register_admin_page' ) ) {
+        Master_Plugin::register_admin_page(
+            'custom-url-redirect-manager',
+            function () {
+                curm_admin_page();
+            }
+        );
+    }
+}, 20 );
