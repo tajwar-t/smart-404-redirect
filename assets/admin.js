@@ -136,7 +136,7 @@
                   Example: <code>/old-about</code> &rarr; <code>/about-us</code>
                 </div>
 
-                <!-- CSV IMPORT PANEL -->
+                <!-- CSV IMPORT PANEL (top) -->
                 <div id="csv-import-panel" style="display:none">
                   <div class="s404r-csv-panel">
                     <div class="s404r-csv-panel-header">
@@ -203,9 +203,12 @@
                   </div>
                 </div>
 
-                <div id="redirects-list" class="s404r-rules-list"></div>
+                <div class="s404r-save-row" style="margin-bottom:16px">
+                  <div style="font-size:12px;color:var(--text-muted)">Exact URL matching &bull; case-insensitive &bull; no wildcards</div>
+                  <button class="s404r-btn s404r-btn-primary" id="save-redirects-top">Save All Redirects</button>
+                </div>
 
-                <!-- ADD REDIRECT FORM -->
+                <!-- ADD REDIRECT FORM (top, above list) -->
                 <div class="s404r-add-rule-form" id="add-redirect-form" style="display:none">
                   <h3>New Page Redirect</h3>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
@@ -242,6 +245,8 @@
                   </div>
                 </div>
 
+                <div id="redirects-list" class="s404r-rules-list"></div>
+
                 <div class="s404r-save-row" style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
                   <div style="font-size:12px;color:var(--text-muted)">Exact URL matching &bull; case-insensitive &bull; no wildcards</div>
                   <button class="s404r-btn s404r-btn-primary" id="save-redirects">Save All Redirects</button>
@@ -263,8 +268,12 @@
                   Example: <code>buy-currency/*</code> &rarr; <code>/buy-currency</code>
                 </div>
 
-                <div id="rules-list" class="s404r-rules-list"></div>
+                <div class="s404r-save-row" style="margin-bottom:16px">
+                  <div style="font-size:12px;color:var(--text-muted)">Drag to reorder &bull; first match wins</div>
+                  <button class="s404r-btn s404r-btn-primary" id="save-rules-top">Save All Rules</button>
+                </div>
 
+                <!-- ADD RULE FORM (top, above list) -->
                 <div class="s404r-add-rule-form" id="add-rule-form" style="display:none">
                   <h3>New 404 Pattern Rule</h3>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
@@ -295,6 +304,8 @@
                   </div>
                 </div>
 
+                <div id="rules-list" class="s404r-rules-list"></div>
+
                 <div class="s404r-save-row" style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
                   <div style="font-size:12px;color:var(--text-muted)">Drag to reorder &bull; first match wins</div>
                   <button class="s404r-btn s404r-btn-primary" id="save-rules">Save All Rules</button>
@@ -309,6 +320,7 @@
               <div class="s404r-card-header">
                 <h2>Activity Log</h2>
                 <button class="s404r-btn s404r-btn-ghost" id="clear-log-btn">Clear Log</button>
+                <button id="s404r-export-btn" class="s404r-btn s404r-btn-primary">Export Log as CSV</button>
               </div>
               <div class="s404r-card-body">
                 <div class="s404r-stats">
@@ -952,8 +964,10 @@
           case "save-general":
             return this.saveGeneral();
           case "save-redirects":
+          case "save-redirects-top":
             return this.saveRedirects();
           case "save-rules":
+          case "save-rules-top":
             return this.saveRules();
           case "clear-log-btn":
             return this.clearLog();
@@ -976,19 +990,32 @@
             return;
           case "csv-confirm-import":
             return this.confirmCsvImport();
-          case "add-redirect-btn":
-            document.getElementById("add-redirect-form").style.display =
-              "block";
+          case "add-redirect-btn": {
+            const form = document.getElementById("add-redirect-form");
+            form.style.display = "block";
             e.target.style.display = "none";
+            form.scrollIntoView({ behavior: "smooth", block: "start" });
+            setTimeout(() => {
+              const f = document.getElementById("new-redir-from");
+              if (f) f.focus();
+            }, 150);
             return;
+          }
           case "cancel-add-redirect":
             document.getElementById("add-redirect-form").style.display = "none";
             document.getElementById("add-redirect-btn").style.display = "";
             return;
-          case "add-rule-btn":
-            document.getElementById("add-rule-form").style.display = "block";
+          case "add-rule-btn": {
+            const form = document.getElementById("add-rule-form");
+            form.style.display = "block";
             e.target.style.display = "none";
+            form.scrollIntoView({ behavior: "smooth", block: "start" });
+            setTimeout(() => {
+              const f = document.getElementById("new-label");
+              if (f) f.focus();
+            }, 150);
             return;
+          }
           case "cancel-add-rule":
             document.getElementById("add-rule-form").style.display = "none";
             document.getElementById("add-rule-btn").style.display = "";
@@ -1074,17 +1101,23 @@
         );
         return;
       }
-      const btn = document.getElementById("save-redirects");
-      btn.disabled = true;
-      btn.textContent = "Saving...";
+      const btns = ["save-redirects", "save-redirects-top"]
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+      btns.forEach((b) => {
+        b.disabled = true;
+        b.textContent = "Saving...";
+      });
       $.post(S404R.ajax_url, {
         action: "s404r_save_redirects",
         nonce: S404R.nonce,
         redirects: JSON.stringify(this.redirects),
       })
         .done((res) => {
-          btn.disabled = false;
-          btn.textContent = "Save All Redirects";
+          btns.forEach((b) => {
+            b.disabled = false;
+            b.textContent = "Save All Redirects";
+          });
           if (res && res.success) {
             this.settings.redirects = this.redirects.map((r) => ({ ...r }));
             this.showNotice("Page redirects saved!", "success");
@@ -1094,8 +1127,10 @@
           }
         })
         .fail((xhr) => {
-          btn.disabled = false;
-          btn.textContent = "Save All Redirects";
+          btns.forEach((b) => {
+            b.disabled = false;
+            b.textContent = "Save All Redirects";
+          });
           this.showNotice("AJAX failed: " + xhr.status, "error");
           console.error(xhr.responseText);
         });
@@ -1109,17 +1144,23 @@
         );
         return;
       }
-      const btn = document.getElementById("save-rules");
-      btn.disabled = true;
-      btn.textContent = "Saving...";
+      const btns = ["save-rules", "save-rules-top"]
+        .map((id) => document.getElementById(id))
+        .filter(Boolean);
+      btns.forEach((b) => {
+        b.disabled = true;
+        b.textContent = "Saving...";
+      });
       $.post(S404R.ajax_url, {
         action: "s404r_save_rules",
         nonce: S404R.nonce,
         rules: JSON.stringify(this.rules),
       })
         .done((res) => {
-          btn.disabled = false;
-          btn.textContent = "Save All Rules";
+          btns.forEach((b) => {
+            b.disabled = false;
+            b.textContent = "Save All Rules";
+          });
           if (res && res.success) {
             this.settings.rules = this.rules.map((r) => ({ ...r }));
             this.showNotice("Rules saved!", "success");
@@ -1129,8 +1170,10 @@
           }
         })
         .fail((xhr) => {
-          btn.disabled = false;
-          btn.textContent = "Save All Rules";
+          btns.forEach((b) => {
+            b.disabled = false;
+            b.textContent = "Save All Rules";
+          });
           this.showNotice("AJAX failed: " + xhr.status, "error");
           console.error(xhr.responseText);
         });
@@ -1154,16 +1197,20 @@
         return;
       }
       this.redirects.push({ id: "redir_" + Date.now(), label, from, to, type });
+      // Clear fields but keep form open so user can add another without scrolling
       ["new-redir-label", "new-redir-from", "new-redir-to"].forEach((id) => {
         document.getElementById(id).value = "";
       });
-      document.getElementById("add-redirect-form").style.display = "none";
-      document.getElementById("add-redirect-btn").style.display = "";
       this.renderRedirects();
       this.showNotice(
         'Redirect added. Click "Save All Redirects" to persist.',
         "success",
       );
+      // Re-focus From field for rapid entry
+      setTimeout(() => {
+        const f = document.getElementById("new-redir-from");
+        if (f) f.focus();
+      }, 50);
     },
 
     addRule() {
@@ -1194,16 +1241,20 @@
         redirect_to: redirect,
         type,
       });
+      // Clear fields but keep form open for rapid entry
       ["new-label", "new-pattern", "new-redirect"].forEach((id) => {
         document.getElementById(id).value = "";
       });
-      document.getElementById("add-rule-form").style.display = "none";
-      document.getElementById("add-rule-btn").style.display = "";
       this.renderRules();
       this.showNotice(
         'Rule added. Click "Save All Rules" to persist.',
         "success",
       );
+      // Re-focus first field
+      setTimeout(() => {
+        const f = document.getElementById("new-label");
+        if (f) f.focus();
+      }, 50);
     },
 
     clearLog() {
@@ -1247,3 +1298,41 @@
     if (document.getElementById("s404r-app")) App.init();
   });
 })(jQuery);
+
+jQuery(document).ready(function ($) {
+  $("#s404r-export-btn").on("click", function (e) {
+    e.preventDefault();
+
+    if (!confirm("Export the activity log as CSV?")) return;
+
+    $.ajax({
+      url: S404R.ajax_url,
+      method: "POST",
+      data: {
+        action: "s404r_export_log",
+        nonce: S404R.nonce,
+      },
+      success: function (response) {
+        if (response.success) {
+          const csvContent = atob(response.data.content);
+          const blob = new Blob([csvContent], {
+            type: "text/csv;charset=utf-8;",
+          });
+          const url = URL.createObjectURL(blob);
+
+          const link = document.createElement("a");
+          link.href = url;
+          link.setAttribute("download", response.data.filename);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        } else {
+          alert(response.data.message || "Failed to export log.");
+        }
+      },
+      error: function () {
+        alert("AJAX error while exporting log.");
+      },
+    });
+  });
+});

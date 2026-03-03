@@ -3,7 +3,7 @@
  * Plugin Name: Smart 404 Redirect
  * Plugin URI: https://example.com/smart-404-redirect
  * Description: Intelligently redirect 404 errors and specific pages with pattern matching and direct page redirects.
- * Version: 1.5.0
+ * Version: 1.7.0
  * Author: Smart Plugins
  * License: GPL v2 or later
  * Text Domain: smart-404-redirect
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'S404R_VERSION', '1.5.0' );
+define( 'S404R_VERSION', '1.7.0' );
 define( 'S404R_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'S404R_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -43,6 +43,7 @@ class Smart404Redirect {
         add_action( 'wp_ajax_s404r_save_redirects',  array( $this, 'ajax_save_redirects' ) );
         add_action( 'wp_ajax_s404r_save_general',    array( $this, 'ajax_save_general' ) );
         add_action( 'wp_ajax_s404r_clear_log',       array( $this, 'ajax_clear_log' ) );
+        add_action('wp_ajax_s404r_export_log', array($this, 'ajax_export_log_csv'));
         register_activation_hook( __FILE__, array( $this, 'activate' ) );
     }
 
@@ -171,7 +172,7 @@ class Smart404Redirect {
             'to'   => $to,
             'rule' => $rule ? ( isset( $rule['label'] ) ? $rule['label'] : 'Rule' ) : 'Default',
         ) );
-        $settings['log'] = array_slice( $log, 0, 100 );
+        $settings['log'] = array_slice( $log, 0, 500 );
         update_option( $this->option_name, $settings );
     }
 
@@ -204,8 +205,8 @@ class Smart404Redirect {
         if ( $hook !== $this->page_hook ) {
             return;
         }
-        wp_enqueue_style(  's404r-admin', S404R_PLUGIN_URL . 'assets/admin.css', array(), S404R_VERSION );
-        wp_enqueue_script( 's404r-admin', S404R_PLUGIN_URL . 'assets/admin.js',  array( 'jquery' ), S404R_VERSION, true );
+        wp_enqueue_style(  's404r-admin', S404R_PLUGIN_URL . 'assets/admin.css', array(), '1.0.2' );
+        wp_enqueue_script( 's404r-admin', S404R_PLUGIN_URL . 'assets/admin.js',  array( 'jquery' ), '1.0.0', true );
         wp_localize_script( 's404r-admin', 'S404R', array(
             'nonce'    => wp_create_nonce( 's404r_nonce' ),
             'ajax_url' => admin_url( 'admin-ajax.php' ),
@@ -314,6 +315,44 @@ class Smart404Redirect {
         update_option( $this->option_name, $settings );
         wp_send_json_success();
     }
+    
+// ─── AJAX: EXPORT LOG AS CSV ─────────────────────────────
+public function ajax_export_log_csv() {
+    check_ajax_referer( 's404r_nonce', 'nonce' );
+
+    if ( ! current_user_can( 'manage_options' ) ) {
+        wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
+    }
+
+    $settings = $this->get_settings();
+    $log      = isset( $settings['log'] ) ? $settings['log'] : array();
+
+    if ( empty( $log ) ) {
+        wp_send_json_error( array( 'message' => 'No log entries found.' ) );
+    }
+
+    // Build CSV
+    $output = fopen('php://temp', 'r+');
+    fputcsv($output, array('Time', 'From URL', 'To URL', 'Rule / Label'));
+
+    foreach($log as $entry){
+        fputcsv($output, array(
+            $entry['time'] ?? '',
+            $entry['from'] ?? '',
+            $entry['to']   ?? '',
+            $entry['rule'] ?? '',
+        ));
+    }
+
+    rewind($output);
+    $csv_content = stream_get_contents($output);
+    fclose($output);
+
+    wp_send_json_success(array(
+        'filename' => 'smart404-log-' . date('Y-m-d') . '.csv',
+        'content'  => base64_encode($csv_content),
+    ));
+}
 
     // ─── PUBLIC API ──────────────────────────────────────────────────────────────
 
