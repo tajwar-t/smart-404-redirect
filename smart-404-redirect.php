@@ -3,7 +3,7 @@
  * Plugin Name: Smart 404 Redirect
  * Plugin URI: https://example.com/smart-404-redirect
  * Description: Intelligently redirect 404 errors and specific pages with pattern matching and direct page redirects.
- * Version: 1.7.0
+ * Version: 2.2.0
  * Author: Smart Plugins
  * License: GPL v2 or later
  * Text Domain: smart-404-redirect
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'S404R_VERSION', '1.7.0' );
+define( 'S404R_VERSION', '2.2.0' );
 define( 'S404R_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'S404R_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -35,9 +35,11 @@ class Smart404Redirect {
         add_action( 'admin_menu',            array( $this, 'add_admin_menu' ) );
         add_action( 'admin_init',            array( $this, 'register_settings' ) );
         add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
-        // Priority 1 = runs early, before most other plugins
-        add_action( 'template_redirect',     array( $this, 'handle_page_redirects' ), 1 );
-        add_action( 'template_redirect',     array( $this, 'handle_404' ), 2 );
+        // Both hooks on template_redirect at default priority (10), same as the
+        // working reference plugin. WordPress canonical redirect also runs at 10
+        // but registered earlier, so it fires first. We run after it.
+        add_action( 'template_redirect', array( $this, 'handle_page_redirects' ) );
+        add_action( 'template_redirect', array( $this, 'handle_404' ) );
         // AJAX handlers
         add_action( 'wp_ajax_s404r_save_rules',      array( $this, 'ajax_save_rules' ) );
         add_action( 'wp_ajax_s404r_save_redirects',  array( $this, 'ajax_save_redirects' ) );
@@ -74,6 +76,10 @@ class Smart404Redirect {
     // ─── FRONT-END: PAGE REDIRECTS (fires on every request) ─────────────────────
 
     public function handle_page_redirects() {
+        if ( is_admin() ) {
+            return;
+        }
+
         $settings  = $this->get_settings();
         $redirects = isset( $settings['redirects'] ) ? $settings['redirects'] : array();
 
@@ -81,14 +87,16 @@ class Smart404Redirect {
             return;
         }
 
-        $current_path = '/' . ltrim( trim( parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' ), '/' );
+        // Compare path only (no scheme/host) — users store "from" as relative paths
+        // like /old-page. Strip query string so ?foo=bar doesn't break matching.
+        $current_path = '/' . ltrim( parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
 
         foreach ( $redirects as $redirect ) {
             if ( empty( $redirect['from'] ) || empty( $redirect['to'] ) ) {
                 continue;
             }
 
-            $from = '/' . ltrim( trim( $redirect['from'], '/' ), '/' );
+            $from = '/' . ltrim( trim( $redirect['from'] ), '/' );
 
             if ( strcasecmp( $current_path, $from ) === 0 ) {
                 $to   = $redirect['to'];
@@ -97,7 +105,7 @@ class Smart404Redirect {
 
                 if ( ! empty( $settings['logging_enabled'] ) ) {
                     $this->log_redirect(
-                        ltrim( $current_path, '/' ),
+                        $current_path,
                         $to,
                         array( 'label' => isset( $redirect['label'] ) ? $redirect['label'] : 'Page Redirect' )
                     );
@@ -125,6 +133,7 @@ class Smart404Redirect {
         $redirect_url = '';
         $matched_rule = null;
 
+        // Check pattern rules.
         if ( ! empty( $settings['rules'] ) ) {
             foreach ( $settings['rules'] as $rule ) {
                 if ( empty( $rule['pattern'] ) || empty( $rule['redirect_to'] ) ) {
@@ -140,6 +149,7 @@ class Smart404Redirect {
             }
         }
 
+        // Fall back to default redirect only if no pattern rule matched.
         if ( empty( $redirect_url ) && ! empty( $settings['default_redirect'] ) ) {
             $redirect_url = $settings['default_redirect'];
         }
@@ -205,8 +215,8 @@ class Smart404Redirect {
         if ( $hook !== $this->page_hook ) {
             return;
         }
-        wp_enqueue_style(  's404r-admin', S404R_PLUGIN_URL . 'assets/admin.css', array(), '1.0.2' );
-        wp_enqueue_script( 's404r-admin', S404R_PLUGIN_URL . 'assets/admin.js',  array( 'jquery' ), '1.0.0', true );
+        wp_enqueue_style(  's404r-admin', S404R_PLUGIN_URL . 'assets/admin.css', array(), S404R_VERSION );
+        wp_enqueue_script( 's404r-admin', S404R_PLUGIN_URL . 'assets/admin.js',  array( 'jquery' ), S404R_VERSION, true );
         wp_localize_script( 's404r-admin', 'S404R', array(
             'nonce'    => wp_create_nonce( 's404r_nonce' ),
             'ajax_url' => admin_url( 'admin-ajax.php' ),
@@ -316,43 +326,43 @@ class Smart404Redirect {
         wp_send_json_success();
     }
     
-// ─── AJAX: EXPORT LOG AS CSV ─────────────────────────────
-public function ajax_export_log_csv() {
-    check_ajax_referer( 's404r_nonce', 'nonce' );
-
-    if ( ! current_user_can( 'manage_options' ) ) {
-        wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
-    }
-
-    $settings = $this->get_settings();
-    $log      = isset( $settings['log'] ) ? $settings['log'] : array();
-
-    if ( empty( $log ) ) {
-        wp_send_json_error( array( 'message' => 'No log entries found.' ) );
-    }
-
-    // Build CSV
-    $output = fopen('php://temp', 'r+');
-    fputcsv($output, array('Time', 'From URL', 'To URL', 'Rule / Label'));
-
-    foreach($log as $entry){
-        fputcsv($output, array(
-            $entry['time'] ?? '',
-            $entry['from'] ?? '',
-            $entry['to']   ?? '',
-            $entry['rule'] ?? '',
+    // ─── AJAX: EXPORT LOG AS CSV ─────────────────────────────
+    public function ajax_export_log_csv() {
+        check_ajax_referer( 's404r_nonce', 'nonce' );
+    
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
+        }
+    
+        $settings = $this->get_settings();
+        $log      = isset( $settings['log'] ) ? $settings['log'] : array();
+    
+        if ( empty( $log ) ) {
+            wp_send_json_error( array( 'message' => 'No log entries found.' ) );
+        }
+    
+        // Build CSV
+        $output = fopen('php://temp', 'r+');
+        fputcsv($output, array('Time', 'From URL', 'To URL', 'Rule / Label'));
+    
+        foreach($log as $entry){
+            fputcsv($output, array(
+                $entry['time'] ?? '',
+                $entry['from'] ?? '',
+                $entry['to']   ?? '',
+                $entry['rule'] ?? '',
+            ));
+        }
+    
+        rewind($output);
+        $csv_content = stream_get_contents($output);
+        fclose($output);
+    
+        wp_send_json_success(array(
+            'filename' => 'smart404-log-' . date('Y-m-d') . '.csv',
+            'content'  => base64_encode($csv_content),
         ));
     }
-
-    rewind($output);
-    $csv_content = stream_get_contents($output);
-    fclose($output);
-
-    wp_send_json_success(array(
-        'filename' => 'smart404-log-' . date('Y-m-d') . '.csv',
-        'content'  => base64_encode($csv_content),
-    ));
-}
 
     // ─── PUBLIC API ──────────────────────────────────────────────────────────────
 
